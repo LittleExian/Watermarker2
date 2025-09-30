@@ -1200,6 +1200,11 @@ class WatermarkerApp(QMainWindow):
                 if watermark_text:
                     draw = ImageDraw.Draw(processed_image, 'RGBA')
                     
+                    # 获取阴影和描边设置
+                    shadow_enabled = self.shadow_check.isChecked()
+                    stroke_enabled = self.stroke_check.isChecked()
+                    opacity_value = int(self.opacity_slider.value() * 2.55)
+                    
                     try:
                         font_style = ''
                         if self.bold_check.isChecked():
@@ -1262,6 +1267,41 @@ class WatermarkerApp(QMainWindow):
                     if self.rotate_slider.value() != 0:
                         temp_img = Image.new('RGBA', (text_width * 2, text_height * 2), (255, 255, 255, 0))
                         temp_draw = ImageDraw.Draw(temp_img)
+                        # 绘制描边
+                        if stroke_enabled:
+                            # 将描边颜色转换为RGBA
+                            stroke_color = QColor(self.stroke_color)
+                            r, g, b = stroke_color.red(), stroke_color.green(), stroke_color.blue()
+                            stroke_width = self.stroke_width.value()
+                            
+                            # 绘制描边（通过在不同位置绘制多次文本）
+                            for x_offset in range(-stroke_width, stroke_width + 1):
+                                for y_offset in range(-stroke_width, stroke_width + 1):
+                                    if x_offset != 0 or y_offset != 0:
+                                        temp_draw.text(
+                                            (text_width + x_offset, text_height + y_offset),
+                                            watermark_text,
+                                            font=font,
+                                            fill=(r, g, b, opacity_value),
+                                            anchor='mm'
+                                        )
+                        
+                        # 绘制阴影
+                        if shadow_enabled:
+                            # 将阴影颜色转换为RGBA
+                            shadow_color = QColor(self.shadow_color)
+                            r, g, b = shadow_color.red(), shadow_color.green(), shadow_color.blue()
+                            shadow_offset = self.shadow_offset.value()
+                            
+                            temp_draw.text(
+                                (text_width + shadow_offset, text_height + shadow_offset),
+                                watermark_text,
+                                font=font,
+                                fill=(r, g, b, opacity_value),
+                                anchor='mm'
+                            )
+                        
+                        # 绘制主要文本
                         temp_draw.text(
                             (text_width, text_height),
                             watermark_text,
@@ -1303,6 +1343,39 @@ class WatermarkerApp(QMainWindow):
                         pos_x = max(0, min(pos_x, img_width - text_width))
                         pos_y = max(0, min(pos_y, img_height - text_height))
                         
+                        # 绘制描边
+                        if stroke_enabled:
+                            # 将描边颜色转换为RGBA
+                            stroke_color = QColor(self.stroke_color)
+                            r, g, b = stroke_color.red(), stroke_color.green(), stroke_color.blue()
+                            stroke_width = self.stroke_width.value()
+                            
+                            # 绘制描边（通过在不同位置绘制多次文本）
+                            for x_offset in range(-stroke_width, stroke_width + 1):
+                                for y_offset in range(-stroke_width, stroke_width + 1):
+                                    if x_offset != 0 or y_offset != 0:
+                                        draw.text(
+                                            (pos_x + x_offset, pos_y + y_offset),
+                                            watermark_text,
+                                            font=font,
+                                            fill=(r, g, b, opacity_value)
+                                        )
+                        
+                        # 绘制阴影
+                        if shadow_enabled:
+                            # 将阴影颜色转换为RGBA
+                            shadow_color = QColor(self.shadow_color)
+                            r, g, b = shadow_color.red(), shadow_color.green(), shadow_color.blue()
+                            shadow_offset = self.shadow_offset.value()
+                            
+                            draw.text(
+                                (pos_x + shadow_offset, pos_y + shadow_offset),
+                                watermark_text,
+                                font=font,
+                                fill=(r, g, b, opacity_value)
+                            )
+                        
+                        # 绘制主要文本
                         draw.text(
                             (pos_x, pos_y),
                             watermark_text,
@@ -1353,6 +1426,14 @@ class WatermarkerApp(QMainWindow):
         template_name, ok = QInputDialog.getText(self, '保存模板', '请输入模板名称:')
         if ok and template_name.strip():
             # 收集当前设置
+            # 处理位置信息，根据类型获取坐标
+            if hasattr(self.watermark_position, 'x') and hasattr(self.watermark_position, 'y'):
+                # 如果是QPoint对象，直接获取坐标
+                pos_x, pos_y = self.watermark_position.x(), self.watermark_position.y()
+            else:
+                # 如果是位置标识符字符串，计算默认位置
+                pos_x, pos_y = 10, 10  # 默认位置
+                
             template = {
                 'text': self.text_content.toPlainText(),
                 'font_size': self.font_size.value(),
@@ -1362,13 +1443,21 @@ class WatermarkerApp(QMainWindow):
                 'italic': self.italic_check.isChecked(),
                 'rotation': self.rotate_slider.value(),
                 'position': {
-                    'x': self.watermark_position.x(),
-                    'y': self.watermark_position.y()
+                    'x': pos_x,
+                    'y': pos_y
                 },
                 'output_format': self.format_combo.currentIndex(),
                 'naming_rule': self.name_combo.currentIndex(),
                 'prefix_suffix': self.prefix_suffix_input.text(),
-                'quality': self.quality_slider.value()
+                'quality': self.quality_slider.value(),
+                # 阴影设置
+                'shadow_enabled': self.shadow_check.isChecked(),
+                'shadow_color': self.shadow_color,
+                'shadow_offset': self.shadow_offset.value(),
+                # 描边设置
+                'stroke_enabled': self.stroke_check.isChecked(),
+                'stroke_color': self.stroke_color,
+                'stroke_width': self.stroke_width.value()
             }
             
             # 保存模板到文件
@@ -1413,6 +1502,18 @@ class WatermarkerApp(QMainWindow):
             self.name_combo.setCurrentIndex(template.get('naming_rule', 0))
             self.prefix_suffix_input.setText(template.get('prefix_suffix', ''))
             self.quality_slider.setValue(template.get('quality', 90))
+            
+            # 应用阴影设置
+            self.shadow_check.setChecked(template.get('shadow_enabled', False))
+            self.shadow_color = template.get('shadow_color', '#000000')
+            self.shadow_color_button.setStyleSheet(f'background-color: {self.shadow_color}; border: 1px solid #ccc;')
+            self.shadow_offset.setValue(template.get('shadow_offset', 2))
+            
+            # 应用描边设置
+            self.stroke_check.setChecked(template.get('stroke_enabled', False))
+            self.stroke_color = template.get('stroke_color', '#000000')
+            self.stroke_color_button.setStyleSheet(f'background-color: {self.stroke_color}; border: 1px solid #ccc;')
+            self.stroke_width.setValue(template.get('stroke_width', 1))
             
             # 更新预览
             self.updatePreview()
