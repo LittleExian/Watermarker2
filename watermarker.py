@@ -1,20 +1,28 @@
 import sys
 import os
 import json
+import sys
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QPushButton, QLabel, QListWidget, QListWidgetItem, QFileDialog, 
     QTextEdit, QSlider, QComboBox, QSpinBox, QColorDialog, QCheckBox,
     QGroupBox, QTabWidget, QLineEdit, QMessageBox, QSplitter, QFrame,
     QInputDialog
 )
-from PyQt5.QtGui import QPixmap, QImage, QPainter, QColor, QFont, QPen
+from PyQt5.QtGui import QPixmap, QImage, QPainter, QColor, QFont, QPen, QIcon
 from PyQt5.QtCore import Qt, QRect, QPoint, QSize
-from PIL import Image, ImageDraw, ImageFont, ImageQt
+from PIL import Image, ImageDraw, ImageFont
 
 class WatermarkerApp(QMainWindow):
     def __init__(self):
         super().__init__()
+        # 初始化变量
+        self.images = []
+        self.image_paths = []
+        self.current_image_index = -1
+        self.watermark_position = QPoint(50, 50)  # 确保初始化为QPoint类型
+        self.dragging = False
+        
         self.initUI()
         self.loadSettings()
         
@@ -304,8 +312,21 @@ class WatermarkerApp(QMainWindow):
                     # 创建缩略图用于显示
                     thumbnail = image.copy()
                     thumbnail.thumbnail((150, 100))
-                    qimage = ImageQt.ImageQt(thumbnail)
-                    item.setIcon(QPixmap.fromImage(qimage))
+                    # 将PIL图像手动转换为QImage
+                    width, height = thumbnail.size
+                    if thumbnail.mode == 'RGB':
+                        bytes_per_line = 3 * width
+                        qimage = QImage(thumbnail.tobytes(), width, height, bytes_per_line, QImage.Format_RGB888)
+                    elif thumbnail.mode == 'RGBA':
+                        bytes_per_line = 4 * width
+                        qimage = QImage(thumbnail.tobytes(), width, height, bytes_per_line, QImage.Format_RGBA8888)
+                    else:
+                        # 转换为RGB
+                        rgb_thumbnail = thumbnail.convert('RGB')
+                        bytes_per_line = 3 * width
+                        qimage = QImage(rgb_thumbnail.tobytes(), width, height, bytes_per_line, QImage.Format_RGB888)
+                    # 正确的做法：将QPixmap转换为QIcon
+                    item.setIcon(QIcon(QPixmap.fromImage(qimage)))
                     
                     self.image_list.addItem(item)
                 except Exception as e:
@@ -355,8 +376,10 @@ class WatermarkerApp(QMainWindow):
             # 如果找不到指定字体，使用默认字体
             font = ImageFont.load_default()
         
-        # 获取文本尺寸
-        text_width, text_height = draw.textsize(watermark_text, font=font)
+        # 获取文本尺寸（Pillow 9.0+ 版本兼容方式）
+        bbox = draw.textbbox((0, 0), watermark_text, font=font)
+        text_width = bbox[2] - bbox[0]  # right - left
+        text_height = bbox[3] - bbox[1]  # bottom - top
         
         # 计算实际位置（相对于预览窗口的位置映射到实际图片）
         img_width, img_height = image.size
@@ -410,7 +433,19 @@ class WatermarkerApp(QMainWindow):
     
     def displayImage(self, image):
         # 将PIL图像转换为QImage
-        qimage = ImageQt.ImageQt(image)
+        # 将PIL图像手动转换为QImage
+        width, height = image.size
+        if image.mode == 'RGB':
+            bytes_per_line = 3 * width
+            qimage = QImage(image.tobytes(), width, height, bytes_per_line, QImage.Format_RGB888)
+        elif image.mode == 'RGBA':
+            bytes_per_line = 4 * width
+            qimage = QImage(image.tobytes(), width, height, bytes_per_line, QImage.Format_RGBA8888)
+        else:
+            # 转换为RGB
+            rgb_image = image.convert('RGB')
+            bytes_per_line = 3 * width
+            qimage = QImage(rgb_image.tobytes(), width, height, bytes_per_line, QImage.Format_RGB888)
         
         # 缩放图像以适应预览窗口
         pixmap = QPixmap.fromImage(qimage)
