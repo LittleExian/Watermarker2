@@ -593,7 +593,41 @@ class WatermarkerApp(QMainWindow):
             temp_img = Image.new('RGBA', (text_width * 2, text_height * 2), (255, 255, 255, 0))
             temp_draw = ImageDraw.Draw(temp_img)
             
-            # 在临时图像中央绘制文本
+            # 绘制描边
+            if stroke_enabled:
+                # 将描边颜色转换为RGBA
+                stroke_color = QColor(self.stroke_color)
+                r, g, b = stroke_color.red(), stroke_color.green(), stroke_color.blue()
+                stroke_width = self.stroke_width.value()
+                
+                # 绘制描边（通过在不同位置绘制多次文本）
+                for x_offset in range(-stroke_width, stroke_width + 1):
+                    for y_offset in range(-stroke_width, stroke_width + 1):
+                        if x_offset != 0 or y_offset != 0:
+                            temp_draw.text(
+                                (text_width + x_offset, text_height + y_offset),
+                                watermark_text,
+                                font=font,
+                                fill=(r, g, b, opacity_value),
+                                anchor='mm'
+                            )
+            
+            # 绘制阴影
+            if shadow_enabled:
+                # 将阴影颜色转换为RGBA
+                shadow_color = QColor(self.shadow_color)
+                r, g, b = shadow_color.red(), shadow_color.green(), shadow_color.blue()
+                shadow_offset = self.shadow_offset.value()
+                
+                temp_draw.text(
+                    (text_width + shadow_offset, text_height + shadow_offset),
+                    watermark_text,
+                    font=font,
+                    fill=(r, g, b, opacity_value),
+                    anchor='mm'
+                )
+            
+            # 绘制主要文本
             temp_draw.text(
                 (text_width, text_height),
                 watermark_text,
@@ -664,7 +698,39 @@ class WatermarkerApp(QMainWindow):
             temp_img = Image.new('RGBA', (text_width * 2, text_height * 2), (255, 255, 255, 0))
             temp_draw = ImageDraw.Draw(temp_img)
             
-            # 在临时图像中央绘制文本
+            # 绘制描边
+            if stroke_enabled:
+                # 将描边颜色转换为RGBA
+                stroke_color = QColor(self.stroke_color)
+                r, g, b = stroke_color.red(), stroke_color.green(), stroke_color.blue()
+                stroke_width = self.stroke_width.value()
+                
+                # 绘制描边（通过在不同位置绘制多次文本）
+                for x_offset in range(-stroke_width, stroke_width + 1):
+                    for y_offset in range(-stroke_width, stroke_width + 1):
+                        if x_offset != 0 or y_offset != 0:
+                            temp_draw.text(
+                                (text_width // 2 + x_offset, text_height // 2 + y_offset),
+                                watermark_text,
+                                font=font,
+                                fill=(r, g, b, opacity_value)
+                            )
+            
+            # 绘制阴影
+            if shadow_enabled:
+                # 将阴影颜色转换为RGBA
+                shadow_color = QColor(self.shadow_color)
+                r, g, b = shadow_color.red(), shadow_color.green(), shadow_color.blue()
+                shadow_offset = self.shadow_offset.value()
+                
+                temp_draw.text(
+                    (text_width // 2 + shadow_offset, text_height // 2 + shadow_offset),
+                    watermark_text,
+                    font=font,
+                    fill=(r, g, b, opacity_value)
+                )
+            
+            # 绘制主要文本
             temp_draw.text(
                 (text_width // 2, text_height // 2),
                 watermark_text,
@@ -1010,41 +1076,6 @@ class WatermarkerApp(QMainWindow):
                             )
                         
                         # 绘制主要文本
-                        # 绘制描边
-                        if stroke_enabled:
-                            # 将描边颜色转换为RGBA
-                            stroke_color = QColor(self.stroke_color)
-                            r, g, b = stroke_color.red(), stroke_color.green(), stroke_color.blue()
-                            stroke_width = self.stroke_width.value()
-                            
-                            # 绘制描边（通过在不同位置绘制多次文本）
-                            for x_offset in range(-stroke_width, stroke_width + 1):
-                                for y_offset in range(-stroke_width, stroke_width + 1):
-                                    if x_offset != 0 or y_offset != 0:
-                                        temp_draw.text(
-                                            (text_width + x_offset, text_height + y_offset),
-                                            watermark_text,
-                                            font=font,
-                                            fill=(r, g, b, opacity_value),
-                                            anchor='mm'
-                                        )
-                        
-                        # 绘制阴影
-                        if shadow_enabled:
-                            # 将阴影颜色转换为RGBA
-                            shadow_color = QColor(self.shadow_color)
-                            r, g, b = shadow_color.red(), shadow_color.green(), shadow_color.blue()
-                            shadow_offset = self.shadow_offset.value()
-                            
-                            temp_draw.text(
-                                (text_width + shadow_offset, text_height + shadow_offset),
-                                watermark_text,
-                                font=font,
-                                fill=(r, g, b, opacity_value),
-                                anchor='mm'
-                            )
-                        
-                        # 绘制主要文本
                         temp_draw.text(
                             (text_width, text_height),
                             watermark_text,
@@ -1086,6 +1117,39 @@ class WatermarkerApp(QMainWindow):
                         pos_x = max(0, min(pos_x, img_width - text_width))
                         pos_y = max(0, min(pos_y, img_height - text_height))
                         
+                        # 绘制描边
+                        if stroke_enabled:
+                            # 将描边颜色转换为RGBA
+                            stroke_color = QColor(self.stroke_color)
+                            r, g, b = stroke_color.red(), stroke_color.green(), stroke_color.blue()
+                            stroke_width = self.stroke_width.value()
+                            
+                            # 绘制描边（通过在不同位置绘制多次文本）
+                            for x_offset in range(-stroke_width, stroke_width + 1):
+                                for y_offset in range(-stroke_width, stroke_width + 1):
+                                    if x_offset != 0 or y_offset != 0:
+                                        draw.text(
+                                            (pos_x + x_offset, pos_y + y_offset),
+                                            watermark_text,
+                                            font=font,
+                                            fill=(r, g, b, opacity_value)
+                                        )
+                        
+                        # 绘制阴影
+                        if shadow_enabled:
+                            # 将阴影颜色转换为RGBA
+                            shadow_color = QColor(self.shadow_color)
+                            r, g, b = shadow_color.red(), shadow_color.green(), shadow_color.blue()
+                            shadow_offset = self.shadow_offset.value()
+                            
+                            draw.text(
+                                (pos_x + shadow_offset, pos_y + shadow_offset),
+                                watermark_text,
+                                font=font,
+                                fill=(r, g, b, opacity_value)
+                            )
+                        
+                        # 绘制主要文本
                         draw.text(
                             (pos_x, pos_y),
                             watermark_text,
