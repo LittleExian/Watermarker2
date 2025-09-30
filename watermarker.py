@@ -379,16 +379,20 @@ class WatermarkerApp(QMainWindow):
             if image_files:
                 self.addImages(image_files)
         
-    def onMousePress(self, event):
+     def onMousePress(self, event):
         if event.button() == Qt.LeftButton:
             self.dragging = True
             self.watermark_position = event.pos()
             self.updatePreview()
-            
+
     def onMouseMove(self, event):
         if self.dragging:
             self.watermark_position = event.pos()
             self.updatePreview()
+
+    def onMouseRelease(self, event):
+        if event.button() == Qt.LeftButton:
+            self.dragging = False
             
     def updatePreview(self):
         if self.current_image_index == -1 or not self.images:
@@ -462,30 +466,41 @@ class WatermarkerApp(QMainWindow):
             )
         else:
             # 如果是QPoint对象（通过鼠标拖拽设置），根据预览窗口与实际图片的比例进行缩放
-            preview_width, preview_height = self.preview_label.size().width(), self.preview_label.size().height()
+            preview_width = self.preview_label.size().width()
+            preview_height = self.preview_label.size().height()
             
-            # 计算预览窗口中图片的实际显示尺寸和位置
-            scaled_width = min(preview_width, img_width)
-            scaled_height = min(preview_height, img_height)
-            scale_x = img_width / scaled_width
-            scale_y = img_height / scaled_height
-            scale = min(scale_x, scale_y)
+            # 计算图片在预览窗口中的实际显示尺寸（保持宽高比）
+            img_ratio = img_width / img_height
+            preview_ratio = preview_width / preview_height
             
-            # 计算图片在预览窗口中的偏移量
+            if img_ratio > preview_ratio:
+                # 图片更宽，以宽度为准
+                scaled_width = preview_width
+                scaled_height = int(preview_width / img_ratio)
+            else:
+                # 图片更高，以高度为准
+                scaled_height = preview_height
+                scaled_width = int(preview_height * img_ratio)
+            
+            # 计算图片在预览窗口中的偏移量（居中显示）
             offset_x = (preview_width - scaled_width) // 2
             offset_y = (preview_height - scaled_height) // 2
             
-            # 计算实际水印位置，考虑偏移量
+            # 获取鼠标点击位置
             click_x = self.watermark_position.x()
             click_y = self.watermark_position.y()
             
             # 检查点击是否在图片区域内
             if offset_x <= click_x < offset_x + scaled_width and offset_y <= click_y < offset_y + scaled_height:
-                # 将点击位置转换为相对于图片的位置，然后缩放到实际图片大小
+                # 将点击位置转换为相对于图片的位置
                 relative_x = click_x - offset_x
                 relative_y = click_y - offset_y
-                pos_x = int(relative_x * scale)
-                pos_y = int(relative_y * scale)
+                
+                # 计算缩放比例并转换到实际图片坐标
+                scale_x = img_width / scaled_width
+                scale_y = img_height / scaled_height
+                pos_x = int(relative_x * scale_x)
+                pos_y = int(relative_y * scale_y)
             else:
                 # 如果点击在图片区域外，默认居中显示
                 pos_x, pos_y = self.calculateActualPosition('center', img_width, img_height, text_width, text_height)
@@ -653,6 +668,7 @@ class WatermarkerApp(QMainWindow):
         self.preview_label.setMouseTracking(True)
         self.preview_label.mousePressEvent = self.onMousePress
         self.preview_label.mouseMoveEvent = self.onMouseMove
+        self.preview_label.mouseReleaseEvent = self.onMouseRelease
         self.dragging = False
     
     def onMousePress(self, event):
