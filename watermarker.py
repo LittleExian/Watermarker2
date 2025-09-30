@@ -148,6 +148,48 @@ class WatermarkerApp(QMainWindow):
         style_layout.addWidget(self.italic_check)
         font_group_layout.addLayout(style_layout)
         
+        # 阴影设置
+        shadow_layout = QHBoxLayout()
+        self.shadow_check = QCheckBox('阴影')
+        self.shadow_check.stateChanged.connect(self.updatePreview)
+        shadow_layout.addWidget(self.shadow_check)
+        
+        self.shadow_color_button = QPushButton()
+        self.shadow_color_button.setFixedSize(30, 30)
+        self.shadow_color = '#000000'  # 默认黑色
+        self.shadow_color_button.setStyleSheet(f'background-color: {self.shadow_color}; border: 1px solid #ccc;')
+        self.shadow_color_button.clicked.connect(lambda: self.selectColor(is_shadow=True))
+        shadow_layout.addWidget(self.shadow_color_button)
+        
+        shadow_layout.addWidget(QLabel('偏移:'))
+        self.shadow_offset = QSpinBox()
+        self.shadow_offset.setRange(1, 10)
+        self.shadow_offset.setValue(2)
+        self.shadow_offset.valueChanged.connect(self.updatePreview)
+        shadow_layout.addWidget(self.shadow_offset)
+        font_group_layout.addLayout(shadow_layout)
+        
+        # 描边设置
+        stroke_layout = QHBoxLayout()
+        self.stroke_check = QCheckBox('描边')
+        self.stroke_check.stateChanged.connect(self.updatePreview)
+        stroke_layout.addWidget(self.stroke_check)
+        
+        self.stroke_color_button = QPushButton()
+        self.stroke_color_button.setFixedSize(30, 30)
+        self.stroke_color = '#000000'  # 默认黑色
+        self.stroke_color_button.setStyleSheet(f'background-color: {self.stroke_color}; border: 1px solid #ccc;')
+        self.stroke_color_button.clicked.connect(lambda: self.selectColor(is_stroke=True))
+        stroke_layout.addWidget(self.stroke_color_button)
+        
+        stroke_layout.addWidget(QLabel('宽度:'))
+        self.stroke_width = QSpinBox()
+        self.stroke_width.setRange(1, 5)
+        self.stroke_width.setValue(1)
+        self.stroke_width.valueChanged.connect(self.updatePreview)
+        stroke_layout.addWidget(self.stroke_width)
+        font_group_layout.addLayout(stroke_layout)
+        
         text_layout.addWidget(font_group)
         
         # 位置设置
@@ -260,6 +302,44 @@ class WatermarkerApp(QMainWindow):
         self.format_combo.currentTextChanged.connect(self.toggleQualitySlider)
         export_layout.addLayout(quality_layout)
         
+        # 图片尺寸调整
+        resize_group = QGroupBox('调整尺寸')
+        resize_layout = QVBoxLayout(resize_group)
+        
+        self.resize_check = QCheckBox('调整输出图片尺寸')
+        resize_layout.addWidget(self.resize_check)
+        
+        size_input_layout = QHBoxLayout()
+        size_input_layout.addWidget(QLabel('宽度:'))
+        self.width_input = QSpinBox()
+        self.width_input.setRange(10, 10000)
+        self.width_input.setValue(1920)
+        self.width_input.setEnabled(False)
+        size_input_layout.addWidget(self.width_input)
+        
+        size_input_layout.addWidget(QLabel('高度:'))
+        self.height_input = QSpinBox()
+        self.height_input.setRange(10, 10000)
+        self.height_input.setValue(1080)
+        self.height_input.setEnabled(False)
+        size_input_layout.addWidget(self.height_input)
+        resize_layout.addLayout(size_input_layout)
+        
+        ratio_layout = QHBoxLayout()
+        ratio_layout.addWidget(QLabel(' '))  # 添加一个空格标签进行对齐
+        self.keep_ratio_check = QCheckBox('保持比例')
+        self.keep_ratio_check.setChecked(True)
+        self.keep_ratio_check.setEnabled(False)
+        ratio_layout.addWidget(self.keep_ratio_check)
+        ratio_layout.addStretch()  # 右侧添加弹性空间
+        resize_layout.addLayout(ratio_layout)
+        export_layout.addWidget(resize_group)
+        
+        # 连接信号槽
+        self.resize_check.stateChanged.connect(self.toggleResizeControls)
+        self.width_input.valueChanged.connect(self.onWidthChanged)
+        self.height_input.valueChanged.connect(self.onHeightChanged)
+        
         # 批量处理按钮
         batch_process_button = QPushButton('批量处理')
         batch_process_button.clicked.connect(self.batchProcess)
@@ -345,6 +425,12 @@ class WatermarkerApp(QMainWindow):
         index = self.image_list.row(item)
         if 0 <= index < len(self.images):
             self.current_image_index = index
+            # 重置尺寸调整控件
+            self.resize_check.setChecked(False)
+            # 获取当前图片的原始尺寸
+            original_width, original_height = self.images[self.current_image_index].size
+            self.width_input.setValue(original_width)
+            self.height_input.setValue(original_height)
             self.updatePreview()
     
     def dragEnterEvent(self, event):
@@ -409,6 +495,10 @@ class WatermarkerApp(QMainWindow):
         
         # 创建绘制对象
         draw = ImageDraw.Draw(image, 'RGBA')
+        
+        # 获取阴影和描边设置
+        shadow_enabled = self.shadow_check.isChecked()
+        stroke_enabled = self.stroke_check.isChecked()
         
         # 设置字体
         try:
@@ -693,11 +783,18 @@ class WatermarkerApp(QMainWindow):
         else:
             return (position_identifier.x(), position_identifier.y())
     
-    def selectColor(self):
+    def selectColor(self, is_shadow=False, is_stroke=False):
         color = QColorDialog.getColor()
         if color.isValid():
-            self.font_color = color.name()
-            self.color_button.setStyleSheet(f'background-color: {self.font_color}; color: white;')
+            if is_shadow:
+                self.shadow_color = color.name()
+                self.shadow_color_button.setStyleSheet(f'background-color: {self.shadow_color}; border: 1px solid #ccc;')
+            elif is_stroke:
+                self.stroke_color = color.name()
+                self.stroke_color_button.setStyleSheet(f'background-color: {self.stroke_color}; border: 1px solid #ccc;')
+            else:
+                self.font_color = color.name()
+                self.color_button.setStyleSheet(f'background-color: {self.font_color}; color: white;')
             self.updatePreview()
     
     def getColorWithOpacity(self):
@@ -720,6 +817,40 @@ class WatermarkerApp(QMainWindow):
             self.quality_slider.setEnabled(True)
         else:
             self.quality_slider.setEnabled(False)
+            
+    def toggleResizeControls(self):
+        enabled = self.resize_check.isChecked()
+        self.width_input.setEnabled(enabled)
+        self.height_input.setEnabled(enabled)
+        self.keep_ratio_check.setEnabled(enabled)
+        
+    def onWidthChanged(self):
+        if self.keep_ratio_check.isChecked() and self.current_image_index != -1:
+            # 获取当前图片的宽高比
+            original_width, original_height = self.images[self.current_image_index].size
+            ratio = original_height / original_width
+            
+            # 计算新的高度
+            new_height = int(self.width_input.value() * ratio)
+            
+            # 临时断开信号连接以避免循环更新
+            self.height_input.valueChanged.disconnect(self.onHeightChanged)
+            self.height_input.setValue(new_height)
+            self.height_input.valueChanged.connect(self.onHeightChanged)
+            
+    def onHeightChanged(self):
+        if self.keep_ratio_check.isChecked() and self.current_image_index != -1:
+            # 获取当前图片的宽高比
+            original_width, original_height = self.images[self.current_image_index].size
+            ratio = original_width / original_height
+            
+            # 计算新的宽度
+            new_width = int(self.height_input.value() * ratio)
+            
+            # 临时断开信号连接以避免循环更新
+            self.width_input.valueChanged.disconnect(self.onWidthChanged)
+            self.width_input.setValue(new_width)
+            self.width_input.valueChanged.connect(self.onWidthChanged)
     
     def exportImage(self):
         if self.current_image_index == -1 or not self.images:
@@ -799,6 +930,11 @@ class WatermarkerApp(QMainWindow):
                     text_width = bbox[2] - bbox[0]  # right - left
                     text_height = bbox[3] - bbox[1]  # bottom - top
                     
+                    # 获取阴影和描边设置
+                    shadow_enabled = self.shadow_check.isChecked()
+                    stroke_enabled = self.stroke_check.isChecked()
+                    opacity_value = int(self.opacity_slider.value() * 2.55)
+                    
                     # 处理位置逻辑
                     if isinstance(self.watermark_position, str):
                         # 如果是位置标识符，根据图片大小计算实际位置
@@ -839,6 +975,76 @@ class WatermarkerApp(QMainWindow):
                     if self.rotate_slider.value() != 0:
                         temp_img = Image.new('RGBA', (text_width * 2, text_height * 2), (255, 255, 255, 0))
                         temp_draw = ImageDraw.Draw(temp_img)
+                        # 绘制描边
+                        if stroke_enabled:
+                            # 将描边颜色转换为RGBA
+                            stroke_color = QColor(self.stroke_color)
+                            r, g, b = stroke_color.red(), stroke_color.green(), stroke_color.blue()
+                            stroke_width = self.stroke_width.value()
+                            
+                            # 绘制描边（通过在不同位置绘制多次文本）
+                            for x_offset in range(-stroke_width, stroke_width + 1):
+                                for y_offset in range(-stroke_width, stroke_width + 1):
+                                    if x_offset != 0 or y_offset != 0:
+                                        temp_draw.text(
+                                            (text_width + x_offset, text_height + y_offset),
+                                            watermark_text,
+                                            font=font,
+                                            fill=(r, g, b, opacity_value),
+                                            anchor='mm'
+                                        )
+                        
+                        # 绘制阴影
+                        if shadow_enabled:
+                            # 将阴影颜色转换为RGBA
+                            shadow_color = QColor(self.shadow_color)
+                            r, g, b = shadow_color.red(), shadow_color.green(), shadow_color.blue()
+                            shadow_offset = self.shadow_offset.value()
+                            
+                            temp_draw.text(
+                                (text_width + shadow_offset, text_height + shadow_offset),
+                                watermark_text,
+                                font=font,
+                                fill=(r, g, b, opacity_value),
+                                anchor='mm'
+                            )
+                        
+                        # 绘制主要文本
+                        # 绘制描边
+                        if stroke_enabled:
+                            # 将描边颜色转换为RGBA
+                            stroke_color = QColor(self.stroke_color)
+                            r, g, b = stroke_color.red(), stroke_color.green(), stroke_color.blue()
+                            stroke_width = self.stroke_width.value()
+                            
+                            # 绘制描边（通过在不同位置绘制多次文本）
+                            for x_offset in range(-stroke_width, stroke_width + 1):
+                                for y_offset in range(-stroke_width, stroke_width + 1):
+                                    if x_offset != 0 or y_offset != 0:
+                                        temp_draw.text(
+                                            (text_width + x_offset, text_height + y_offset),
+                                            watermark_text,
+                                            font=font,
+                                            fill=(r, g, b, opacity_value),
+                                            anchor='mm'
+                                        )
+                        
+                        # 绘制阴影
+                        if shadow_enabled:
+                            # 将阴影颜色转换为RGBA
+                            shadow_color = QColor(self.shadow_color)
+                            r, g, b = shadow_color.red(), shadow_color.green(), shadow_color.blue()
+                            shadow_offset = self.shadow_offset.value()
+                            
+                            temp_draw.text(
+                                (text_width + shadow_offset, text_height + shadow_offset),
+                                watermark_text,
+                                font=font,
+                                fill=(r, g, b, opacity_value),
+                                anchor='mm'
+                            )
+                        
+                        # 绘制主要文本
                         temp_draw.text(
                             (text_width, text_height),
                             watermark_text,
@@ -887,6 +1093,11 @@ class WatermarkerApp(QMainWindow):
                             fill=self.getColorWithOpacity()
                         )
                 
+                # 如果启用了尺寸调整，调整图像大小
+                if self.resize_check.isChecked():
+                    # 使用LANCZOS滤波器进行高质量缩放
+                    image = image.resize((self.width_input.value(), self.height_input.value()), Image.LANCZOS)
+                
                 # 保存图像
                 if format == 'jpeg':
                     if image.mode == 'RGBA':
@@ -902,6 +1113,11 @@ class WatermarkerApp(QMainWindow):
     def batchProcess(self):
         if not self.images:
             QMessageBox.warning(self, '警告', '请先导入图片')
+            return
+        
+        # 检查是否启用了尺寸调整
+        if self.resize_check.isChecked():
+            QMessageBox.warning(self, '警告', '启用尺寸调整时不支持批量处理')
             return
         
         # 选择输出文件夹
