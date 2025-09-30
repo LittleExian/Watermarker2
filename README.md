@@ -74,13 +74,17 @@ Watermarker2是一款功能强大的图片水印工具，用于为图片添加�
 - Python 3.6 或更高版本
 - Windows 或 MacOS 操作系统
 
-### 安装步骤
+### 使用方式
 
-#### 使用启动脚本（Windows）
+#### 1. 使用可执行文件（推荐，Windows）
+1. 在项目的 `dist` 文件夹中找到 `Watermarker.exe` 文件
+2. 直接双击运行该文件即可使用（无需安装Python环境）
+
+#### 2. 使用启动脚本（Windows）
 1. 下载或克隆本项目到本地
 2. 双击运行 `start.bat` 文件，脚本会自动安装依赖并启动应用程序
 
-#### 手动安装（所有平台）
+#### 3. 手动安装（所有平台）
 1. 下载或克隆本项目到本地
 2. 打开命令行终端，进入项目目录
 3. 安装依赖：
@@ -125,7 +129,10 @@ Watermarker2/
 ├── start.bat         # Windows启动脚本
 ├── PRD.md            # 产品需求文档
 ├── README.md         # 项目说明文档
-└── LICENSE           # 许可证文件
+├── LICENSE           # 许可证文件
+├── dist/             # 包含打包后的可执行文件
+│   └── Watermarker.exe  # Windows可执行文件
+└── test_images/      # 测试图片文件夹
 ```
 
 ## 开发说明
