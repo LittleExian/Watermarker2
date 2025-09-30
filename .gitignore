@@ -10,8 +10,6 @@ env/
 
 # Build outputs
 build/
-dist/
-!dist/Watermarker.exe
 *.spec
 
 # IDE files
