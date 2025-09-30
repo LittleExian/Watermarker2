@@ -31,6 +31,9 @@ class WatermarkerApp(QMainWindow):
         self.setWindowTitle('Watermarker2')
         self.setGeometry(100, 100, 1200, 800)
         
+        # 启用拖放功能
+        self.setAcceptDrops(True)
+        
         # 创建中央部件
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -49,7 +52,7 @@ class WatermarkerApp(QMainWindow):
         left_layout.addWidget(import_button)
         
         # 批量导入按钮
-        batch_import_button = QPushButton('批量导入')
+        batch_import_button = QPushButton('文件夹导入')
         batch_import_button.clicked.connect(self.batchImportImages)
         left_layout.addWidget(batch_import_button)
         
@@ -344,6 +347,49 @@ class WatermarkerApp(QMainWindow):
             self.current_image_index = index
             self.updatePreview()
     
+    def dragEnterEvent(self, event):
+        # 检查拖入的是否为文件
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+            
+    def dragMoveEvent(self, event):
+        # 允许在窗口中移动拖拽的文件
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+            
+    def dropEvent(self, event):
+        # 处理拖放的文件
+        if event.mimeData().hasUrls():
+            # 获取拖入的文件路径列表
+            files = [url.toLocalFile() for url in event.mimeData().urls()]
+            # 过滤出图片文件
+            image_files = []
+            supported_formats = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']
+            for file_path in files:
+                # 如果是目录，递归获取所有图片文件
+                if os.path.isdir(file_path):
+                    for root, dirs, files_in_dir in os.walk(file_path):
+                        for f in files_in_dir:
+                            if any(f.lower().endswith(ext) for ext in supported_formats):
+                                image_files.append(os.path.join(root, f))
+                # 如果是文件，检查是否为支持的图片格式
+                elif any(file_path.lower().endswith(ext) for ext in supported_formats):
+                    image_files.append(file_path)
+            # 添加图片
+            if image_files:
+                self.addImages(image_files)
+        
+    def onMousePress(self, event):
+        if event.button() == Qt.LeftButton:
+            self.dragging = True
+            self.watermark_position = event.pos()
+            self.updatePreview()
+            
+    def onMouseMove(self, event):
+        if self.dragging:
+            self.watermark_position = event.pos()
+            self.updatePreview()
+            
     def updatePreview(self):
         if self.current_image_index == -1 or not self.images:
             return
@@ -418,14 +464,31 @@ class WatermarkerApp(QMainWindow):
             # 如果是QPoint对象（通过鼠标拖拽设置），根据预览窗口与实际图片的比例进行缩放
             preview_width, preview_height = self.preview_label.size().width(), self.preview_label.size().height()
             
-            # 等比例缩放位置
-            scale_x = img_width / min(preview_width, img_width)
-            scale_y = img_height / min(preview_height, img_height)
+            # 计算预览窗口中图片的实际显示尺寸和位置
+            scaled_width = min(preview_width, img_width)
+            scaled_height = min(preview_height, img_height)
+            scale_x = img_width / scaled_width
+            scale_y = img_height / scaled_height
             scale = min(scale_x, scale_y)
             
-            # 计算实际水印位置
-            pos_x = int(self.watermark_position.x() * scale)
-            pos_y = int(self.watermark_position.y() * scale)
+            # 计算图片在预览窗口中的偏移量
+            offset_x = (preview_width - scaled_width) // 2
+            offset_y = (preview_height - scaled_height) // 2
+            
+            # 计算实际水印位置，考虑偏移量
+            click_x = self.watermark_position.x()
+            click_y = self.watermark_position.y()
+            
+            # 检查点击是否在图片区域内
+            if offset_x <= click_x < offset_x + scaled_width and offset_y <= click_y < offset_y + scaled_height:
+                # 将点击位置转换为相对于图片的位置，然后缩放到实际图片大小
+                relative_x = click_x - offset_x
+                relative_y = click_y - offset_y
+                pos_x = int(relative_x * scale)
+                pos_y = int(relative_y * scale)
+            else:
+                # 如果点击在图片区域外，默认居中显示
+                pos_x, pos_y = self.calculateActualPosition('center', img_width, img_height, text_width, text_height)
         
         # 保存原始位置信息，用于旋转时的位置计算
         original_position = self.watermark_position
