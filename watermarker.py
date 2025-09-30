@@ -118,8 +118,8 @@ class WatermarkerApp(QMainWindow):
         color_layout.addWidget(QLabel('字体颜色:'))
         self.color_button = QPushButton('选择颜色')
         self.color_button.clicked.connect(self.selectColor)
-        self.color_button.setStyleSheet('background-color: black; color: white;')
-        self.font_color = '#000000'
+        self.font_color = '#FFFFFF'  # 默认白色
+        self.color_button.setStyleSheet('background-color: #FFFFFF; color: black; border: 1px solid #ccc;')
         color_layout.addWidget(self.color_button)
         font_group_layout.addLayout(color_layout)
         
@@ -155,18 +155,19 @@ class WatermarkerApp(QMainWindow):
         position_grid = QWidget()
         position_grid_layout = QGridLayout(position_grid)
         
-        positions = [
-            ('左上', QPoint(10, 10)),
-            ('右上', QPoint(100, 10)),
-            ('左下', QPoint(10, 100)),
-            ('右下', QPoint(100, 100)),
-            ('居中', QPoint(55, 55))
+        # 使用字符串标识符而非固定像素值，这些将在updatePreview中转换为实际位置
+        position_ids = [
+            ('左上', 'top-left'),
+            ('右上', 'top-right'),
+            ('左下', 'bottom-left'),
+            ('右下', 'bottom-right'),
+            ('居中', 'center')
         ]
         
-        for i, (text, pos) in enumerate(positions):
+        for i, (text, pos_id) in enumerate(position_ids):
             btn = QPushButton(text)
             btn.setFixedSize(70, 30)
-            btn.clicked.connect(lambda checked, p=pos: self.setWatermarkPosition(p))
+            btn.clicked.connect(lambda checked, p=pos_id: self.setWatermarkPosition(p))
             if i < 3:
                 position_grid_layout.addWidget(btn, 0, i)
             else:
@@ -274,7 +275,7 @@ class WatermarkerApp(QMainWindow):
         self.images = []  # 存储PIL Image对象
         self.image_paths = []  # 存储文件路径
         self.current_image_index = -1
-        self.watermark_position = QPoint(10, 10)  # 默认水印位置
+        self.watermark_position = 'top-left'  # 默认水印位置（使用位置标识符）
         self.templates = {}
         self.templates_dir = os.path.join(os.path.expanduser('~'), '.watermarker2', 'templates')
         os.makedirs(self.templates_dir, exist_ok=True)
@@ -361,38 +362,73 @@ class WatermarkerApp(QMainWindow):
         
         # 设置字体
         try:
-            font_style = ''
-            if self.bold_check.isChecked():
-                font_style += 'bold'
-            if self.italic_check.isChecked():
-                if font_style:
-                    font_style += 'italic'
-                else:
-                    font_style += 'italic'
+            # 获取粗体和斜体状态
+            bold = self.bold_check.isChecked()
+            italic = self.italic_check.isChecked()
             
-            # 尝试加载系统字体
-            font = ImageFont.truetype('arial.ttf', self.font_size.value())
-        except:
+            # 根据粗体和斜体选择合适的字体文件
+            font = None
+            
+            # 尝试加载适合当前样式的字体
+            if bold:
+                # 优先尝试加载粗体字体
+                try:
+                    font = ImageFont.truetype('msyhbd.ttc', self.font_size.value())
+                except:
+                    try:
+                        font = ImageFont.truetype('simhei.ttf', self.font_size.value())
+                    except:
+                        pass
+            
+            # 如果粗体字体加载失败，尝试其他字体
+            if font is None:
+                font_names = ['msyh.ttc', 'simhei.ttf', 'simsun.ttc']
+                for font_name in font_names:
+                    try:
+                        font = ImageFont.truetype(font_name, self.font_size.value())
+                        break
+                    except (OSError, IOError):
+                        continue
+            
             # 如果找不到指定字体，使用默认字体
+            if font is None:
+                font = ImageFont.load_default()
+        except Exception as e:
+            # 字体设置出错时使用默认字体
             font = ImageFont.load_default()
+        
+        # 获取透明度值（确保使用正确的滑块值）
+        opacity_value = int(self.opacity_slider.value() * 2.55)
         
         # 获取文本尺寸（Pillow 9.0+ 版本兼容方式）
         bbox = draw.textbbox((0, 0), watermark_text, font=font)
         text_width = bbox[2] - bbox[0]  # right - left
         text_height = bbox[3] - bbox[1]  # bottom - top
         
-        # 计算实际位置（相对于预览窗口的位置映射到实际图片）
+        # 计算实际位置
         img_width, img_height = image.size
-        preview_width, preview_height = self.preview_label.size().width(), self.preview_label.size().height()
         
-        # 等比例缩放位置
-        scale_x = img_width / min(preview_width, img_width)
-        scale_y = img_height / min(preview_height, img_height)
-        scale = min(scale_x, scale_y)
+        # 处理位置逻辑
+        if isinstance(self.watermark_position, str):
+            # 如果是位置标识符（从预设按钮选择），根据图片大小计算实际位置
+            pos_x, pos_y = self.calculateActualPosition(
+                self.watermark_position, img_width, img_height, text_width, text_height
+            )
+        else:
+            # 如果是QPoint对象（通过鼠标拖拽设置），根据预览窗口与实际图片的比例进行缩放
+            preview_width, preview_height = self.preview_label.size().width(), self.preview_label.size().height()
+            
+            # 等比例缩放位置
+            scale_x = img_width / min(preview_width, img_width)
+            scale_y = img_height / min(preview_height, img_height)
+            scale = min(scale_x, scale_y)
+            
+            # 计算实际水印位置
+            pos_x = int(self.watermark_position.x() * scale)
+            pos_y = int(self.watermark_position.y() * scale)
         
-        # 计算实际水印位置
-        pos_x = int(self.watermark_position.x() * scale)
-        pos_y = int(self.watermark_position.y() * scale)
+        # 保存原始位置信息，用于旋转时的位置计算
+        original_position = self.watermark_position
         
         # 应用旋转
         if self.rotate_slider.value() != 0:
@@ -409,25 +445,101 @@ class WatermarkerApp(QMainWindow):
                 anchor='mm'
             )
             
+            # 如果需要斜体效果，先应用斜体变换
+            if italic:
+                # 应用剪切变换来创建斜体效果
+                shear_factor = 0.25
+                width, height = temp_img.size
+                
+                # 创建变换矩阵，添加水平偏移补偿
+                transform = (1, shear_factor, -height * shear_factor / 2, 0, 1, 0)
+                
+                # 计算新的宽度（考虑剪切后的扩展）
+                new_width = int(width + height * abs(shear_factor))
+                
+                # 应用变换
+                temp_img = temp_img.transform(
+                    (new_width, height),
+                    Image.AFFINE,
+                    transform,
+                    Image.BICUBIC
+                )
+                
+                # 更新文本宽度以适应斜体变换
+                text_width = new_width
+            
             # 旋转临时图像
             rotated_img = temp_img.rotate(self.rotate_slider.value(), expand=1)
             
-            # 计算旋转后图像的位置
+            # 计算旋转后图像的尺寸
             rot_width, rot_height = rotated_img.size
-            pos_x = max(0, min(pos_x - rot_width // 2, img_width - rot_width))
-            pos_y = max(0, min(pos_y - rot_height // 2, img_height - rot_height))
+            
+            # 对于预设位置（如左下、右下等），确保旋转后的文本仍然保持在相应位置
+            if isinstance(original_position, str):
+                # 重新计算旋转后的位置，确保它保持在选定的区域内
+                if original_position == 'top-left':
+                    pos_x = 10
+                    pos_y = 10
+                elif original_position == 'top-right':
+                    pos_x = img_width - rot_width - 10
+                    pos_y = 10
+                elif original_position == 'bottom-left':
+                    pos_x = 10
+                    pos_y = img_height - rot_height - 10
+                elif original_position == 'bottom-right':
+                    pos_x = img_width - rot_width - 10
+                    pos_y = img_height - rot_height - 10
+                elif original_position == 'center':
+                    pos_x = (img_width - rot_width) // 2
+                    pos_y = (img_height - rot_height) // 2
+            else:
+                # 对于鼠标拖拽的位置，使用原有的计算方式
+                pos_x = max(0, min(pos_x - rot_width // 2, img_width - rot_width))
+                pos_y = max(0, min(pos_y - rot_height // 2, img_height - rot_height))
             
             # 粘贴旋转后的水印到原图
             image.paste(rotated_img, (pos_x, pos_y), rotated_img)
         else:
-            # 直接在原图上绘制文本
-            draw.text(
-                (pos_x, pos_y),
+            # 直接在原图上绘制文本，添加边界检查以确保文本不会超出图片范围
+            # 为了确保透明度正确应用，统一使用临时图像方式绘制
+            
+            # 创建临时图像
+            temp_img = Image.new('RGBA', (text_width * 2, text_height * 2), (255, 255, 255, 0))
+            temp_draw = ImageDraw.Draw(temp_img)
+            
+            # 在临时图像中央绘制文本
+            temp_draw.text(
+                (text_width // 2, text_height // 2),
                 watermark_text,
                 font=font,
                 fill=self.getColorWithOpacity()
             )
-        
+            
+            # 如果需要斜体效果，应用变换
+            if italic:
+                shear_factor = 0.25
+                width, height = temp_img.size
+                
+                # 创建变换矩阵（不添加偏移）
+                transform = (1, shear_factor, 0, 0, 1, 0)
+                
+                # 计算新的宽度（考虑剪切后的扩展）
+                new_width = int(width + height * abs(shear_factor))
+                
+                # 应用变换
+                temp_img = temp_img.transform(
+                    (new_width, height),
+                    Image.AFFINE,
+                    transform,
+                    Image.BICUBIC
+                )
+            
+            # 调整位置，确保文本完全在图片范围内
+            paste_x = max(0, min(pos_x - text_width // 2, img_width - temp_img.width))
+            paste_y = max(0, min(pos_y - text_height // 2, img_height - temp_img.height))
+            
+            # 粘贴到原图，使用临时图像作为mask确保透明度正确
+            image.paste(temp_img, (paste_x, paste_y), temp_img)
         # 显示处理后的图像
         self.displayImage(image)
     
@@ -447,16 +559,32 @@ class WatermarkerApp(QMainWindow):
             bytes_per_line = 3 * width
             qimage = QImage(rgb_image.tobytes(), width, height, bytes_per_line, QImage.Format_RGB888)
         
-        # 缩放图像以适应预览窗口
+        # 确保图像在预览窗口中完全显示，同时保持宽高比
         pixmap = QPixmap.fromImage(qimage)
+        
+        # 获取预览标签的可用大小（考虑边框等）
+        available_size = self.preview_label.size()
+        
+        # 计算缩放比例，确保图片完全显示在预览窗口中
         scaled_pixmap = pixmap.scaled(
-            self.preview_label.size(),
+            available_size,
             Qt.KeepAspectRatio,
             Qt.SmoothTransformation
         )
         
+        # 创建一个新的QPixmap作为画布，大小与预览标签相同
+        display_pixmap = QPixmap(available_size)
+        display_pixmap.fill(Qt.transparent)  # 填充透明背景
+        
+        # 在画布中央绘制缩放后的图像
+        painter = QPainter(display_pixmap)
+        x = (available_size.width() - scaled_pixmap.width()) // 2
+        y = (available_size.height() - scaled_pixmap.height()) // 2
+        painter.drawPixmap(x, y, scaled_pixmap)
+        painter.end()
+        
         # 显示图像
-        self.preview_label.setPixmap(scaled_pixmap)
+        self.preview_label.setPixmap(display_pixmap)
         
         # 重新设置鼠标追踪以启用拖拽功能
         self.preview_label.setMouseTracking(True)
@@ -476,8 +604,26 @@ class WatermarkerApp(QMainWindow):
             self.updatePreview()
     
     def setWatermarkPosition(self, position):
+        # 如果传入的是字符串标识符（位置预设按钮调用），保存标识符而非实际坐标
+        # 如果传入的是QPoint（鼠标拖拽调用），保存实际坐标
         self.watermark_position = position
         self.updatePreview()
+    
+    def calculateActualPosition(self, position_identifier, image_width, image_height, text_width, text_height):
+        # 根据位置标识符计算实际位置
+        margin = 30  # 增加安全边距
+        if position_identifier == 'top-left':
+            return (margin, margin)
+        elif position_identifier == 'top-right':
+            return (image_width - text_width - margin, margin)
+        elif position_identifier == 'bottom-left':
+            return (margin, image_height - text_height - margin)
+        elif position_identifier == 'bottom-right':
+            return (image_width - text_width - margin, image_height - text_height - margin)
+        elif position_identifier == 'center':
+            return ((image_width - text_width) // 2, (image_height - text_height) // 2)
+        else:
+            return (position_identifier.x(), position_identifier.y())
     
     def selectColor(self):
         color = QColorDialog.getColor()
@@ -564,31 +710,43 @@ class WatermarkerApp(QMainWindow):
                     draw = ImageDraw.Draw(image, 'RGBA')
                     
                     try:
-                        font_style = ''
-                        if self.bold_check.isChecked():
-                            font_style += 'bold'
-                        if self.italic_check.isChecked():
-                            if font_style:
-                                font_style += 'italic'
-                            else:
-                                font_style += 'italic'
-                        
-                        font = ImageFont.truetype('arial.ttf', self.font_size.value())
+                        # 根据粗体斜体选择不同的字体文件
+                        if self.bold_check.isChecked() and self.italic_check.isChecked():
+                            font = ImageFont.truetype('arialbi.ttf', self.font_size.value())  # 粗斜体
+                        elif self.bold_check.isChecked():
+                            font = ImageFont.truetype('arialbd.ttf', self.font_size.value())  # 粗体
+                        elif self.italic_check.isChecked():
+                            font = ImageFont.truetype('ariali.ttf', self.font_size.value())   # 斜体
+                        else:
+                            font = ImageFont.truetype('arial.ttf', self.font_size.value())    # 常规
                     except:
+                        # 如果找不到指定字体，使用默认字体
                         font = ImageFont.load_default()
                     
                     # 计算实际位置
                     img_width, img_height = image.size
-                    preview_width, preview_height = self.preview_label.size().width(), self.preview_label.size().height()
-                    scale_x = img_width / min(preview_width, img_width)
-                    scale_y = img_height / min(preview_height, img_height)
-                    scale = min(scale_x, scale_y)
                     
-                    pos_x = int(self.watermark_position.x() * scale)
-                    pos_y = int(self.watermark_position.y() * scale)
+                    # 获取文本尺寸（Pillow 9.0+ 版本兼容方式）
+                    bbox = draw.textbbox((0, 0), watermark_text, font=font)
+                    text_width = bbox[2] - bbox[0]  # right - left
+                    text_height = bbox[3] - bbox[1]  # bottom - top
+                    
+                    # 处理位置逻辑
+                    if isinstance(self.watermark_position, str):
+                        # 如果是位置标识符，根据图片大小计算实际位置
+                        pos_x, pos_y = self.calculateActualPosition(
+                            self.watermark_position, img_width, img_height, text_width, text_height
+                        )
+                    else:
+                        # 如果是QPoint对象，根据预览窗口与实际图片的比例进行缩放
+                        preview_width, preview_height = self.preview_label.size().width(), self.preview_label.size().height()
+                        scale_x = img_width / min(preview_width, img_width)
+                        scale_y = img_height / min(preview_height, img_height)
+                        scale = min(scale_x, scale_y)
+                        pos_x = int(self.watermark_position.x() * scale)
+                        pos_y = int(self.watermark_position.y() * scale)
                     
                     if self.rotate_slider.value() != 0:
-                        text_width, text_height = draw.textsize(watermark_text, font=font)
                         temp_img = Image.new('RGBA', (text_width * 2, text_height * 2), (255, 255, 255, 0))
                         temp_draw = ImageDraw.Draw(temp_img)
                         temp_draw.text(
@@ -600,10 +758,38 @@ class WatermarkerApp(QMainWindow):
                         )
                         rotated_img = temp_img.rotate(self.rotate_slider.value(), expand=1)
                         rot_width, rot_height = rotated_img.size
-                        pos_x = max(0, min(pos_x - rot_width // 2, img_width - rot_width))
-                        pos_y = max(0, min(pos_y - rot_height // 2, img_height - rot_height))
+                        
+                        if isinstance(self.watermark_position, str):
+                            if self.watermark_position == 'top-left':
+                                pos_x, pos_y = 10, 10
+                            elif self.watermark_position == 'top-right':
+                                pos_x = img_width - rot_width - 10
+                                pos_y = 10
+                            elif self.watermark_position == 'bottom-left':
+                                pos_x = 10
+                                pos_y = img_height - rot_height - 10
+                            elif self.watermark_position == 'bottom-right':
+                                pos_x = img_width - rot_width - 10
+                                pos_y = img_height - rot_height - 10
+                            elif self.watermark_position == 'center':
+                                pos_x = (img_width - rot_width) // 2
+                                pos_y = (img_height - rot_height) // 2
+                        else:
+                            pos_x = max(0, min(pos_x - rot_width // 2, img_width - rot_width))
+                            pos_y = max(0, min(pos_y - rot_height // 2, img_height - rot_height))
+                        
                         image.paste(rotated_img, (pos_x, pos_y), rotated_img)
                     else:
+                        # 对于未旋转的水印，如果使用预设位置，重新计算准确位置
+                        if isinstance(self.watermark_position, str):
+                            pos_x, pos_y = self.calculateActualPosition(
+                                self.watermark_position, img_width, img_height, text_width, text_height
+                            )
+                        
+                        # 确保文本完全在图片范围内
+                        pos_x = max(0, min(pos_x, img_width - text_width))
+                        pos_y = max(0, min(pos_y, img_height - text_height))
+                        
                         draw.text(
                             (pos_x, pos_y),
                             watermark_text,
@@ -660,16 +846,28 @@ class WatermarkerApp(QMainWindow):
                     
                     # 计算实际位置（使用默认位置或上次设置的位置）
                     img_width, img_height = processed_image.size
-                    preview_width, preview_height = self.preview_label.size().width(), self.preview_label.size().height()
-                    scale_x = img_width / min(preview_width, img_width)
-                    scale_y = img_height / min(preview_height, img_height)
-                    scale = min(scale_x, scale_y)
                     
-                    pos_x = int(self.watermark_position.x() * scale)
-                    pos_y = int(self.watermark_position.y() * scale)
+                    # 获取文本尺寸（Pillow 9.0+ 版本兼容方式）
+                    bbox = draw.textbbox((0, 0), watermark_text, font=font)
+                    text_width = bbox[2] - bbox[0]  # right - left
+                    text_height = bbox[3] - bbox[1]  # bottom - top
+                    
+                    # 处理位置逻辑
+                    if isinstance(self.watermark_position, str):
+                        # 如果是位置标识符，根据图片大小计算实际位置
+                        pos_x, pos_y = self.calculateActualPosition(
+                            self.watermark_position, img_width, img_height, text_width, text_height
+                        )
+                    else:
+                        # 如果是QPoint对象，根据预览窗口与实际图片的比例进行缩放
+                        preview_width, preview_height = self.preview_label.size().width(), self.preview_label.size().height()
+                        scale_x = img_width / min(preview_width, img_width)
+                        scale_y = img_height / min(preview_height, img_height)
+                        scale = min(scale_x, scale_y)
+                        pos_x = int(self.watermark_position.x() * scale)
+                        pos_y = int(self.watermark_position.y() * scale)
                     
                     if self.rotate_slider.value() != 0:
-                        text_width, text_height = draw.textsize(watermark_text, font=font)
                         temp_img = Image.new('RGBA', (text_width * 2, text_height * 2), (255, 255, 255, 0))
                         temp_draw = ImageDraw.Draw(temp_img)
                         temp_draw.text(
@@ -681,10 +879,38 @@ class WatermarkerApp(QMainWindow):
                         )
                         rotated_img = temp_img.rotate(self.rotate_slider.value(), expand=1)
                         rot_width, rot_height = rotated_img.size
-                        pos_x = max(0, min(pos_x - rot_width // 2, img_width - rot_width))
-                        pos_y = max(0, min(pos_y - rot_height // 2, img_height - rot_height))
+                        
+                        if isinstance(self.watermark_position, str):
+                            if self.watermark_position == 'top-left':
+                                pos_x, pos_y = 10, 10
+                            elif self.watermark_position == 'top-right':
+                                pos_x = img_width - rot_width - 10
+                                pos_y = 10
+                            elif self.watermark_position == 'bottom-left':
+                                pos_x = 10
+                                pos_y = img_height - rot_height - 10
+                            elif self.watermark_position == 'bottom-right':
+                                pos_x = img_width - rot_width - 10
+                                pos_y = img_height - rot_height - 10
+                            elif self.watermark_position == 'center':
+                                pos_x = (img_width - rot_width) // 2
+                                pos_y = (img_height - rot_height) // 2
+                        else:
+                            pos_x = max(0, min(pos_x - rot_width // 2, img_width - rot_width))
+                            pos_y = max(0, min(pos_y - rot_height // 2, img_height - rot_height))
+                        
                         processed_image.paste(rotated_img, (pos_x, pos_y), rotated_img)
                     else:
+                        # 对于未旋转的水印，如果使用预设位置，重新计算准确位置
+                        if isinstance(self.watermark_position, str):
+                            pos_x, pos_y = self.calculateActualPosition(
+                                self.watermark_position, img_width, img_height, text_width, text_height
+                            )
+                        
+                        # 确保文本完全在图片范围内
+                        pos_x = max(0, min(pos_x, img_width - text_width))
+                        pos_y = max(0, min(pos_y, img_height - text_height))
+                        
                         draw.text(
                             (pos_x, pos_y),
                             watermark_text,
